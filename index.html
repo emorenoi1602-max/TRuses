@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>USES Delivery Tracker — Atlantic Quantum</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+:root {
+  --navy:   #1B3A6B;
+  --blue:   #2D72B8;
+  --lblue:  #5B9BD5;
+  --sky:    #D6E8F7;
+  --bg:     #F0F4FA;
+  --card:   #FFFFFF;
+  --border: #D1DCED;
+  --dark:   #1E2B3C;
+  --gray:   #6C7A8D;
+  --lgray:  #E8EDF4;
+  --done:   #1A9660;
+  --done-bg:#EBF7F2;
+  --prog:   #C47D11;
+  --prog-bg:#FEF3DC;
+  --plan:   #4A6080;
+  --plan-bg:#EBF0F7;
+  --red:    #C0392B;
+  --red-bg: #FDECEA;
+  --font: 'Segoe UI', system-ui, sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:var(--font);background:var(--bg);color:var(--dark);min-height:100vh;font-size:14px}
+
+/* ── Header ── */
+.header{background:var(--navy);color:#fff;padding:0 24px;display:flex;align-items:center;height:56px;gap:16px;position:sticky;top:0;z-index:100}
+.header-logo{font-size:11px;letter-spacing:.1em;opacity:.7;white-space:nowrap}
+.header-title{font-size:15px;font-weight:600}
+.header-date{margin-left:auto;font-size:11px;opacity:.6}
+
+/* ── Tabs ── */
+.tabs{background:var(--navy);display:flex;gap:2px;padding:0 24px;border-top:1px solid rgba(255,255,255,.1)}
+.tab{padding:10px 18px;font-size:12px;font-weight:500;color:rgba(255,255,255,.55);cursor:pointer;border-bottom:2px solid transparent;letter-spacing:.04em;transition:all .2s;white-space:nowrap}
+.tab:hover{color:rgba(255,255,255,.85)}
+.tab.active{color:#fff;border-bottom-color:var(--lblue)}
+
+/* ── Layout ── */
+.main{padding:24px;max-width:1400px;margin:0 auto}
+.page{display:none}.page.active{display:block}
+
+/* ── KPI strip ── */
+.kpi-strip{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:24px}
+.kpi{background:var(--card);border:1px solid var(--border);border-radius:10px;padding:16px;text-align:center}
+.kpi-num{font-size:28px;font-weight:700;color:var(--navy);line-height:1}
+.kpi-label{font-size:11px;color:var(--gray);margin-top:4px;letter-spacing:.04em}
+.kpi.green .kpi-num{color:var(--done)}
+.kpi.amber .kpi-num{color:var(--prog)}
+.kpi.blue  .kpi-num{color:var(--blue)}
+
+/* ── Progress bar ── */
+.prog-bar-wrap{background:var(--lgray);border-radius:99px;height:8px;overflow:hidden}
+.prog-bar{height:100%;border-radius:99px;transition:width .4s ease}
+.prog-bar.green{background:var(--done)}
+.prog-bar.amber{background:var(--prog)}
+.prog-bar.blue{background:var(--blue)}
+
+/* ── Cards ── */
+.card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:16px}
+.card-header{display:flex;align-items:center;gap:12px;margin-bottom:16px}
+.card-title{font-size:15px;font-weight:600;color:var(--navy)}
+.card-sub{font-size:12px;color:var(--gray);margin-top:2px}
+
+/* ── Phase steps ── */
+.phases{display:flex;gap:6px;flex-wrap:wrap}
+.phase-pill{display:flex;flex-direction:column;align-items:center;gap:4px;cursor:pointer;flex:1;min-width:90px;max-width:140px}
+.phase-dot{width:100%;padding:6px 8px;border-radius:8px;text-align:center;font-size:11px;font-weight:600;letter-spacing:.02em;transition:all .2s;border:1.5px solid transparent;user-select:none}
+.phase-dot.DONE{background:var(--done-bg);color:var(--done);border-color:var(--done)}
+.phase-dot.IN_PROGRESS{background:var(--prog-bg);color:var(--prog);border-color:var(--prog)}
+.phase-dot.PLANNED{background:var(--plan-bg);color:var(--plan);border-color:var(--plan)}
+.phase-dot.NA{background:var(--lgray);color:#aaa;border-color:#ddd;cursor:default}
+.phase-name{font-size:10px;color:var(--gray);text-align:center;line-height:1.2}
+.phase-dates{font-size:9px;color:#aaa;text-align:center}
+
+/* ── Batch badges ── */
+.batch-badge{width:36px;height:36px;border-radius:50%;background:var(--navy);color:#fff;display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;flex-shrink:0}
+.status-badge{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;font-size:11px;font-weight:600}
+.badge-done{background:var(--done-bg);color:var(--done)}
+.badge-prog{background:var(--prog-bg);color:var(--prog)}
+.badge-plan{background:var(--plan-bg);color:var(--plan)}
+
+/* ── Gantt ── */
+.gantt-wrap{overflow-x:auto}
+.gantt{min-width:800px}
+.gantt-header{display:flex;margin-bottom:4px}
+.gantt-label-col{width:160px;flex-shrink:0}
+.gantt-months{flex:1;display:grid;grid-template-columns:repeat(3,1fr)}
+.gantt-month{text-align:center;font-size:11px;font-weight:600;color:#fff;padding:5px;border-radius:4px}
+.gantt-row{display:flex;align-items:center;margin-bottom:5px;min-height:26px}
+.gantt-row-label{width:160px;flex-shrink:0;font-size:11px;color:var(--dark);padding-right:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.gantt-track{flex:1;background:var(--lgray);border-radius:4px;height:22px;position:relative}
+.gantt-bar{position:absolute;height:100%;border-radius:4px;display:flex;align-items:center;padding:0 6px;font-size:9px;color:#fff;font-weight:600;white-space:nowrap;overflow:hidden;transition:opacity .2s}
+.gantt-bar:hover{opacity:.85}
+.gantt-sep{flex:1;border-left:1px dashed var(--border);margin-top:0}
+.gantt-group{margin-bottom:2px;font-size:10px;font-weight:700;color:var(--navy);letter-spacing:.06em;padding:12px 0 4px 160px;text-transform:uppercase}
+
+/* ── Instructor cards ── */
+.inst-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px}
+.inst-card{background:var(--card);border:1px solid var(--border);border-radius:12px;overflow:hidden}
+.inst-top{padding:16px;display:flex;align-items:center;gap:12px}
+.inst-avatar{width:44px;height:44px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;font-weight:700;color:#fff;flex-shrink:0}
+.inst-name{font-size:14px;font-weight:600;color:var(--navy)}
+.inst-role{font-size:11px;color:var(--gray);margin-top:2px}
+.inst-body{padding:12px 16px;border-top:1px solid var(--lgray)}
+.inst-sessions{list-style:none;display:flex;flex-direction:column;gap:4px}
+.inst-sessions li{font-size:12px;color:var(--dark);display:flex;align-items:center;gap:6px}
+.inst-sessions li::before{content:'';width:6px;height:6px;border-radius:50%;flex-shrink:0}
+.inst-load{margin-top:12px;font-size:11px;color:var(--gray);margin-bottom:4px}
+
+/* ── Notes ── */
+.note-form{display:flex;gap:8px;margin-bottom:16px;flex-wrap:wrap}
+.note-form select,.note-form input,.note-form textarea{border:1px solid var(--border);border-radius:8px;padding:8px 12px;font-size:13px;font-family:var(--font);background:var(--card);color:var(--dark)}
+.note-form select{width:140px}
+.note-form textarea{flex:1;min-width:200px;resize:vertical;min-height:60px}
+.note-form button{padding:8px 20px;background:var(--blue);color:#fff;border:none;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;white-space:nowrap}
+.note-form button:hover{background:var(--navy)}
+.note-item{background:var(--card);border:1px solid var(--border);border-radius:8px;padding:12px 16px;margin-bottom:8px;display:flex;gap:12px}
+.note-dot{width:8px;height:8px;border-radius:50%;background:var(--blue);margin-top:5px;flex-shrink:0}
+.note-meta{font-size:11px;color:var(--gray);margin-top:4px}
+.note-text{font-size:13px;line-height:1.5;color:var(--dark)}
+.note-tag{display:inline-block;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:600;background:var(--sky);color:var(--blue);margin-right:6px}
+.delete-btn{margin-left:auto;padding:2px 8px;border:1px solid var(--border);border-radius:4px;background:transparent;color:var(--gray);font-size:11px;cursor:pointer;flex-shrink:0}
+.delete-btn:hover{border-color:var(--red);color:var(--red)}
+
+/* ── Section title ── */
+.sec-title{font-size:13px;font-weight:600;color:var(--navy);letter-spacing:.06em;text-transform:uppercase;margin-bottom:12px;padding-bottom:6px;border-bottom:2px solid var(--lgray)}
+
+/* ── Charts container ── */
+.charts-row{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:24px}
+@media(max-width:700px){.charts-row{grid-template-columns:1fr}}
+.chart-card{background:var(--card);border:1px solid var(--border);border-radius:12px;padding:20px}
+.chart-title{font-size:12px;font-weight:600;color:var(--gray);letter-spacing:.06em;text-transform:uppercase;margin-bottom:16px}
+
+/* ── Legend ── */
+.legend{display:flex;flex-wrap:wrap;gap:12px;margin-bottom:12px}
+.legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--gray)}
+.legend-dot{width:10px;height:10px;border-radius:2px}
+
+/* ── Tooltip ── */
+.tooltip-wrap{position:relative;display:inline-block}
+.tooltip-wrap .tip{position:absolute;bottom:110%;left:50%;transform:translateX(-50%);background:var(--dark);color:#fff;padding:4px 8px;border-radius:6px;font-size:11px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .2s;z-index:50}
+.tooltip-wrap:hover .tip{opacity:1}
+
+/* ── Misc ── */
+.empty{padding:32px;text-align:center;color:var(--gray);font-size:13px}
+.tag-filter{display:flex;gap:6px;margin-bottom:16px;flex-wrap:wrap}
+.tag-btn{padding:5px 12px;border:1px solid var(--border);border-radius:99px;font-size:11px;font-weight:500;background:var(--card);color:var(--gray);cursor:pointer}
+.tag-btn.active,.tag-btn:hover{background:var(--blue);color:#fff;border-color:var(--blue)}
+.export-btn{padding:7px 16px;border:1px solid var(--border);border-radius:8px;background:var(--card);color:var(--dark);font-size:12px;font-weight:500;cursor:pointer;margin-left:auto;display:flex;align-items:center;gap:6px}
+.export-btn:hover{background:var(--lgray)}
+.row-between{display:flex;align-items:center;gap:8px;margin-bottom:16px}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <div class="header-logo">ATLANTIC QUANTUM INNOVATION SAS</div>
+    <div class="header-title">USES Delivery Tracker</div>
+  </div>
+  <div class="header-date" id="header-date"></div>
+</div>
+
+<div class="tabs">
+  <div class="tab active" onclick="showPage('dashboard')">Dashboard</div>
+  <div class="tab" onclick="showPage('batches')">Seguimiento Batches</div>
+  <div class="tab" onclick="showPage('gantt')">Timeline Gantt</div>
+  <div class="tab" onclick="showPage('team')">Equipo</div>
+  <div class="tab" onclick="showPage('notes')">Notas Operacionales</div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════ DASHBOARD -->
+<div class="main">
+<div class="page active" id="page-dashboard">
+  <div class="kpi-strip" id="kpi-strip"></div>
+
+  <div class="charts-row">
+    <div class="chart-card">
+      <div class="chart-title">Estado global de fases</div>
+      <div class="legend" id="donut-legend"></div>
+      <div style="position:relative;height:200px">
+        <canvas id="donutChart" role="img" aria-label="Distribución de fases por estado"></canvas>
+      </div>
+    </div>
+    <div class="chart-card">
+      <div class="chart-title">Avance por Batch</div>
+      <div style="position:relative;height:230px">
+        <canvas id="batchChart" role="img" aria-label="Fases completadas por batch"></canvas>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-title">Progreso por Batch</div>
+  <div id="dash-batches"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════ BATCH DETAIL -->
+<div class="page" id="page-batches">
+  <div id="batch-cards"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ GANTT -->
+<div class="page" id="page-gantt">
+  <div class="card">
+    <div class="legend" style="margin-bottom:16px">
+      <div class="legend-item"><div class="legend-dot" style="background:#1B3A6B"></div>Reclutamiento</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#2D72B8"></div>Training T1</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#7B4DBF"></div>Training T1+T2</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#1A9660"></div>Nesting T1</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#117A4D"></div>Nesting T1+T2</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#5B9BD5"></div>Training T2</div>
+      <div class="legend-item"><div class="legend-dot" style="background:#2E8B7A"></div>Nesting T2</div>
+    </div>
+    <div class="gantt-wrap">
+      <div class="gantt" id="gantt-content"></div>
+    </div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════════════════════════════ EQUIPO -->
+<div class="page" id="page-team">
+  <div class="inst-grid" id="team-cards"></div>
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════════ NOTAS -->
+<div class="page" id="page-notes">
+  <div class="card">
+    <div class="note-form">
+      <select id="note-batch">
+        <option value="General">General</option>
+        <option value="Batch 1">Batch 1</option>
+        <option value="Batch 2A">Batch 2A</option>
+        <option value="Batch 2B">Batch 2B</option>
+        <option value="Batch 3">Batch 3</option>
+        <option value="Batch 4">Batch 4</option>
+        <option value="T2 Batch 1">T2 Batch 1</option>
+        <option value="T2 Batch 2">T2 Batch 2</option>
+        <option value="T2 Batch 3">T2 Batch 3</option>
+        <option value="Instructores">Instructores</option>
+      </select>
+      <textarea id="note-text" placeholder="Escribe una nota operacional..."></textarea>
+      <button onclick="addNote()">+ Agregar</button>
+    </div>
+  </div>
+  <div class="row-between">
+    <div class="tag-filter" id="note-filter"></div>
+    <button class="export-btn" onclick="exportNotes()">↓ Exportar notas</button>
+  </div>
+  <div id="notes-list"></div>
+</div>
+</div>
+
+<script>
+// ══════════════════════════════════════════════════════════ DATA MODEL
+const STATUS_CYCLE = ['PLANNED','IN_PROGRESS','DONE'];
+const STATUS_LABEL = {DONE:'✓ Completado', IN_PROGRESS:'⟳ En Curso', PLANNED:'◉ Planificado', NA:'— N/A'};
+
+const BATCHES_INIT = [
+  {
+    id:1, name:'Batch 1', hc:'19 Ag + 1TR + 1TL + 1QA', agents:22,
+    phases:[
+      {id:'rec', label:'Reclutamiento', dates:'01/04–06/04', status:'DONE',        trainer:'—'},
+      {id:'t1',  label:'Training T1',   dates:'07/04–11/04', status:'DONE',        trainer:'Bogotá Trainer'},
+      {id:'n1',  label:'Nesting T1',    dates:'13/04–19/04', status:'DONE',        trainer:'BQL Trainer'},
+      {id:'t2',  label:'Training T2',   dates:'—',           status:'NA',          trainer:'—'},
+      {id:'n2',  label:'Nesting T2',    dates:'—',           status:'NA',          trainer:'—'},
+    ]
+  },
+  {
+    id:2, name:'Batch 2A', hc:'15 Ag  —  Solo T1', agents:15,
+    phases:[
+      {id:'rec', label:'Reclutamiento', dates:'06/04–17/04', status:'DONE',        trainer:'—'},
+      {id:'t1',  label:'Training T1',   dates:'20/04–24/04', status:'DONE',        trainer:'Cristina'},
+      {id:'n1',  label:'Nesting T1',    dates:'25/04–01/05', status:'DONE',        trainer:'BQL Trainer'},
+      {id:'t2',  label:'Training T2',   dates:'—',           status:'NA',          trainer:'—'},
+      {id:'n2',  label:'Nesting T2',    dates:'—',           status:'NA',          trainer:'—'},
+    ]
+  },
+  {
+    id:3, name:'Batch 2B', hc:'15 Ag + 1TR + 1TL + 1QA  —  T1+T2', agents:18,
+    phases:[
+      {id:'rec', label:'Reclutamiento', dates:'06/04–17/04', status:'DONE',        trainer:'—'},
+      {id:'t1',  label:'Training T1',   dates:'20/04–24/04', status:'DONE',        trainer:'Bogotá Trainer'},
+      {id:'tt2', label:'Training T2',   dates:'25/04–04/05', status:'DONE',        trainer:'Bogotá Trainer'},
+      {id:'n12', label:'Nesting T1+T2', dates:'05/05–11/05', status:'DONE',        trainer:'BQL Trainer'},
+      {id:'n2',  label:'Nesting T2',    dates:'—',           status:'NA',          trainer:'—'},
+    ]
+  },
+  {
+    id:4, name:'Batch 3', hc:'15 Ag + 2 TL', agents:17,
+    phases:[
+      {id:'rec', label:'Reclutamiento', dates:'06/05–07/05', status:'IN_PROGRESS', trainer:'—'},
+      {id:'t1',  label:'Training T1',   dates:'08/05–13/05', status:'IN_PROGRESS', trainer:'BQL Trainer'},
+      {id:'n1',  label:'Nesting T1',    dates:'14/05–20/05', status:'PLANNED',     trainer:'BQL Trainer'},
+      {id:'t2',  label:'Training T2',   dates:'—',           status:'NA',          trainer:'—'},
+      {id:'n2',  label:'Nesting T2',    dates:'—',           status:'NA',          trainer:'—'},
+    ]
+  },
+  {
+    id:5, name:'Batch 4', hc:'30 Ag', agents:30,
+    phases:[
+      {id:'rec', label:'Reclutamiento', dates:'01/05–15/05', status:'PLANNED',     trainer:'—'},
+      {id:'t1',  label:'Training T1',   dates:'18/05–22/05', status:'PLANNED',     trainer:'BQL Trainer'},
+      {id:'n1',  label:'Nesting T1',    dates:'23/05–29/05', status:'PLANNED',     trainer:'BQL Trainer'},
+      {id:'t2',  label:'Training T2',   dates:'—',           status:'NA',          trainer:'—'},
+      {id:'n2',  label:'Nesting T2',    dates:'—',           status:'NA',          trainer:'—'},
+    ]
+  },
+  {
+    id:6, name:'T2 Batch 1', hc:'15 Ag + 1TL  —  Solo T2', agents:16, existing:true,
+    phases:[
+      {id:'rec', label:'Reclutamiento', dates:'—',           status:'NA',          trainer:'—'},
+      {id:'t1',  label:'Training T1',   dates:'—',           status:'NA',          trainer:'—'},
+      {id:'n1',  label:'Nesting T1',    dates:'—',           status:'NA',          trainer:'—'},
+      {id:'t2',  label:'Training T2',   dates:'12/05–20/05', status:'IN_PROGRESS', trainer:'Bogotá Trainer'},
+      {id:'n2',  label:'Nesting T2',    dates:'21/05–27/05', status:'PLANNED',     trainer:'—'},
+    ]
+  },
+  {
+    id:7, name:'T2 Batch 2', hc:'15 Ag  —  Solo T2', agents:15, existing:true,
+    phases:[
+      {id:'rec', label:'Reclutamiento', dates:'—',           status:'NA',          trainer:'—'},
+      {id:'t1',  label:'Training T1',   dates:'—',           status:'NA',          trainer:'—'},
+      {id:'n1',  label:'Nesting T1',    dates:'—',           status:'NA',          trainer:'—'},
+      {id:'t2',  label:'Training T2',   dates:'25/05–30/05', status:'PLANNED',     trainer:'Bogotá Trainer'},
+      {id:'n2',  label:'Nesting T2',    dates:'31/05–06/06', status:'PLANNED',     trainer:'—'},
+    ]
+  },
+  {
+    id:8, name:'T2 Batch 3', hc:'15 Ag  —  Solo T2', agents:15, existing:true,
+    phases:[
+      {id:'rec', label:'Reclutamiento', dates:'—',           status:'NA',          trainer:'—'},
+      {id:'t1',  label:'Training T1',   dates:'—',           status:'NA',          trainer:'—'},
+      {id:'n1',  label:'Nesting T1',    dates:'—',           status:'NA',          trainer:'—'},
+      {id:'t2',  label:'Training T2',   dates:'08/06–13/06', status:'PLANNED',     trainer:'Barranquilla Trainer'},
+      {id:'n2',  label:'Nesting T2',    dates:'15/06–21/06', status:'PLANNED',     trainer:'—'},
+    ]
+  }
+];
+
+const TEAM = [
+  {name:'Bogotá Trainer',      role:'Instructor Senior',        initials:'BT', color:'#1B3A6B',
+   sessions:['B1 T1 (07–11/abr)','B2B T1 (20–24/abr)','B2B T2 (25/abr–04/may)','T2B1 Training (12–20/may)','T2B2 Training (25–30/may)'], level:'T1 & T2', load:5},
+  {name:'Cristina',            role:'Instructor Especialista',  initials:'CR', color:'#2D72B8',
+   sessions:['B2A T1 — 15 agentes (20–24/abr)'], level:'T1', load:1},
+  {name:'Barranquilla Trainer',role:'Instructor Local',         initials:'BQ', color:'#5B9BD5',
+   sessions:['B1 Nesting T1','B2A Nesting T1 (25/abr–01/may)','B2B Nesting T1+T2 (05–11/may)','B3 T1 en curso','B4 T1 y T2','T2B3 Training (08–13/jun)'], level:'T1 & T2', load:5},
+  {name:'Nuevo Instructor A',  role:'Instructor en Formación',  initials:'NA', color:'#7F8C8D',
+   sessions:['B3 T1 (apoyo Bogotá Trainer)'], level:'T1', load:1},
+  {name:'Nuevo Instructor B',  role:'Instructor en Formación',  initials:'NB', color:'#7F8C8D',
+   sessions:['B4 T1+T2 (apoyo BQL Trainer)'], level:'T1+T2', load:1},
+];
+
+// ══════════════════════════════════════════════════════════ STATE / STORAGE
+const SK = 'uses_tracker_v6';
+let STATE = JSON.parse(localStorage.getItem(SK) || 'null');
+if (!STATE) {
+  STATE = { batches: JSON.parse(JSON.stringify(BATCHES_INIT)), notes: [] };
+  save();
+}
+BATCHES_INIT.forEach(bi => {
+  let b = STATE.batches.find(x=>x.id===bi.id);
+  if(!b){ STATE.batches.push(JSON.parse(JSON.stringify(bi))); return; }
+  bi.phases.forEach(pi => {
+    let p = b.phases.find(x=>x.id===pi.id);
+    if(!p) b.phases.push(JSON.parse(JSON.stringify(pi)));
+  });
+});
+
+function save(){ localStorage.setItem(SK, JSON.stringify(STATE)); }
+
+// ══════════════════════════════════════════════════════════ NAVIGATION
+function showPage(id){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
+  document.getElementById('page-'+id).classList.add('active');
+  const tabs = ['dashboard','batches','gantt','team','notes'];
+  document.querySelectorAll('.tab')[tabs.indexOf(id)].classList.add('active');
+  renderAll();
+}
+
+// ══════════════════════════════════════════════════════════ HELPERS
+function phaseCounts(batches){
+  let done=0,prog=0,plan=0,na=0;
+  batches.forEach(b=>b.phases.forEach(p=>{
+    if(p.status==='DONE') done++;
+    else if(p.status==='IN_PROGRESS') prog++;
+    else if(p.status==='PLANNED') plan++;
+    else na++;
+  }));
+  return {done,prog,plan,na};
+}
+
+function batchPct(batch){
+  const active = batch.phases.filter(p=>p.status!=='NA');
+  const done   = active.filter(p=>p.status==='DONE').length;
+  return active.length ? Math.round(done/active.length*100) : 0;
+}
+
+function overallPct(){
+  const all = STATE.batches.flatMap(b=>b.phases).filter(p=>p.status!=='NA');
+  const done = all.filter(p=>p.status==='DONE').length;
+  return all.length ? Math.round(done/all.length*100) : 0;
+}
+
+function cyclStatus(bIdx, pIdx){
+  const p = STATE.batches[bIdx].phases[pIdx];
+  if(p.status==='NA') return;
+  const i = STATUS_CYCLE.indexOf(p.status);
+  p.status = STATUS_CYCLE[(i+1)%STATUS_CYCLE.length];
+  save(); renderAll();
+}
+
+// ══════════════════════════════════════════════════════════ DASHBOARD
+let donutChart=null, batchChart=null;
+
+function renderDashboard(){
+  // Header date
+  document.getElementById('header-date').textContent =
+    new Date().toLocaleDateString('es-CO',{weekday:'long',year:'numeric',month:'long',day:'numeric'});
+
+  const counts = phaseCounts(STATE.batches);
+  const total     = STATE.batches.filter(b=>!b.existing).reduce((a,b)=>a+b.agents,0);
+  const totalT2ex = STATE.batches.filter(b=>b.existing).reduce((a,b)=>a+b.agents,0);
+  const doneBatches = STATE.batches.filter(b=>!b.existing && batchPct(b)===100).length;
+
+  // KPIs
+  const kpiEl = document.getElementById('kpi-strip');
+  kpiEl.innerHTML = `
+    <div class="kpi blue"><div class="kpi-num">${total}</div><div class="kpi-label">AGENTES NUEVOS</div></div>
+    <div class="kpi"><div class="kpi-num">${totalT2ex}</div><div class="kpi-label">UPSKILL T2 (existentes)</div></div>
+    <div class="kpi"><div class="kpi-num">${STATE.batches.filter(b=>!b.existing).length}</div><div class="kpi-label">BATCHES NUEVOS</div></div>
+    <div class="kpi green"><div class="kpi-num">${doneBatches}</div><div class="kpi-label">BATCHES COMPLETOS</div></div>
+    <div class="kpi green"><div class="kpi-num">${counts.done}</div><div class="kpi-label">FASES COMPLETADAS</div></div>
+    <div class="kpi amber"><div class="kpi-num">${counts.prog}</div><div class="kpi-label">FASES EN CURSO</div></div>
+    <div class="kpi blue"><div class="kpi-num">${overallPct()}%</div><div class="kpi-label">AVANCE GLOBAL</div></div>
+  `;
+
+  // Donut legend
+  document.getElementById('donut-legend').innerHTML = `
+    <div class="legend-item"><div class="legend-dot" style="background:#1A9660"></div>Completado (${counts.done})</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#C47D11"></div>En Curso (${counts.prog})</div>
+    <div class="legend-item"><div class="legend-dot" style="background:#4A6080"></div>Planificado (${counts.plan})</div>
+  `;
+
+  // Donut chart
+  if(donutChart) donutChart.destroy();
+  donutChart = new Chart(document.getElementById('donutChart'),{
+    type:'doughnut',
+    data:{
+      labels:['Completado','En Curso','Planificado'],
+      datasets:[{data:[counts.done,counts.prog,counts.plan],
+        backgroundColor:['#1A9660','#C47D11','#4A6080'],
+        borderWidth:2, borderColor:'#fff', hoverOffset:4}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false},tooltip:{callbacks:{
+        label:ctx=>' '+ctx.label+': '+ctx.parsed
+      }}},
+      cutout:'68%'
+    }
+  });
+
+  // Bar chart
+  if(batchChart) batchChart.destroy();
+  batchChart = new Chart(document.getElementById('batchChart'),{
+    type:'bar',
+    data:{
+      labels:STATE.batches.map(b=>b.name),
+      datasets:[
+        {label:'Completadas',data:STATE.batches.map(b=>b.phases.filter(p=>p.status==='DONE').length),
+          backgroundColor:'#1A9660',borderRadius:4,barPercentage:.6},
+        {label:'En Curso',data:STATE.batches.map(b=>b.phases.filter(p=>p.status==='IN_PROGRESS').length),
+          backgroundColor:'#C47D11',borderRadius:4,barPercentage:.6},
+        {label:'Planificadas',data:STATE.batches.map(b=>b.phases.filter(p=>p.status==='PLANNED').length),
+          backgroundColor:'#BACFE4',borderRadius:4,barPercentage:.6},
+      ]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{position:'bottom',labels:{font:{size:11},boxWidth:10,padding:12}}},
+      scales:{x:{stacked:true,grid:{display:false}},y:{stacked:true,ticks:{stepSize:1},grid:{color:'#F0F4FA'}}}
+    }
+  });
+
+  // Batch progress bars
+  const dashBatches = document.getElementById('dash-batches');
+  dashBatches.innerHTML = STATE.batches.map(b=>{
+    const pct = batchPct(b);
+    const col = pct===100?'green':pct>0?'amber':'blue';
+    return `
+    <div class="card" style="margin-bottom:12px">
+      <div style="display:flex;align-items:center;gap:12px;margin-bottom:10px">
+        <div class="batch-badge">${b.id}</div>
+        <div style="flex:1">
+          <div style="display:flex;align-items:center;justify-content:space-between">
+            <div class="card-title">${b.name}${b.existing?' <span style="font-size:10px;background:#EBF0F7;color:#4A6080;padding:2px 7px;border-radius:99px;font-weight:500;vertical-align:middle">Upskill T2</span>':''}</div>
+            <div style="font-size:13px;font-weight:700;color:var(--${col==='green'?'done':col==='amber'?'prog':'blue'})">${pct}%</div>
+          </div>
+          <div class="card-sub">${b.hc}</div>
+        </div>
+      </div>
+      <div class="prog-bar-wrap"><div class="prog-bar ${col}" style="width:${pct}%"></div></div>
+      <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+        ${b.phases.map(p=>`
+          <div class="status-badge ${p.status==='DONE'?'badge-done':p.status==='IN_PROGRESS'?'badge-prog':p.status==='NA'?'':' badge-plan'}" style="font-size:10px">
+            ${p.label}: ${p.status==='DONE'?'✓':p.status==='IN_PROGRESS'?'⟳':p.status==='NA'?'—':'●'}
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════ BATCH DETAIL
+function renderBatches(){
+  const el = document.getElementById('batch-cards');
+  el.innerHTML = STATE.batches.map((b,bi)=>{
+    const pct = batchPct(b);
+    const col = pct===100?'#1A9660':pct>0?'#C47D11':'#2D72B8';
+    return `
+    <div class="card">
+      <div class="card-header">
+        <div class="batch-badge" style="background:${col}">${b.id}</div>
+        <div style="flex:1">
+          <div class="card-title">${b.name} — ${b.hc}${b.existing?' <span style="font-size:10px;background:#EBF0F7;color:#4A6080;padding:2px 8px;border-radius:99px;font-weight:500;vertical-align:middle">Upskill · agentes existentes</span>':''}</div>
+          <div class="card-sub">${b.agents} colaboradores · Avance: ${pct}%</div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:22px;font-weight:700;color:${col}">${pct}%</div>
+          <div style="font-size:10px;color:var(--gray)">completado</div>
+        </div>
+      </div>
+      <div style="margin-bottom:12px"><div class="prog-bar-wrap"><div class="prog-bar" style="width:${pct}%;background:${col}"></div></div></div>
+      <div style="font-size:11px;color:var(--gray);margin-bottom:10px">Haz clic en una fase para actualizar su estado →</div>
+      <div class="phases">
+        ${b.phases.map((p,pi)=>`
+          <div class="phase-pill tooltip-wrap" onclick="${p.status!=='NA'?`cyclStatus(${bi},${pi})`:''}">
+            <div class="phase-dot ${p.status}">${STATUS_LABEL[p.status]}</div>
+            <div class="phase-name">${p.label}</div>
+            <div class="phase-dates">${p.dates}</div>
+            <div class="phase-dates" style="color:var(--lblue)">${p.trainer}</div>
+            ${p.status!=='NA'?`<div class="tip">Clic para avanzar estado</div>`:''}
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════ GANTT
+const GANTT_ROWS = [
+  {label:'B1 · Reclutamiento',   s:'2026-04-01', e:'2026-04-06', color:'#1B3A6B'},
+  {label:'B1 · Training T1',     s:'2026-04-07', e:'2026-04-11', color:'#2D72B8'},
+  {label:'B1 · Nesting T1',      s:'2026-04-13', e:'2026-04-19', color:'#1A9660'},
+  {label:'B2A · Reclutamiento',  s:'2026-04-06', e:'2026-04-17', color:'#1B3A6B'},
+  {label:'B2A · Training T1',    s:'2026-04-20', e:'2026-04-24', color:'#2D72B8'},
+  {label:'B2A · Nesting T1',     s:'2026-04-25', e:'2026-05-01', color:'#1A9660'},
+  {label:'B2B · Reclutamiento',  s:'2026-04-06', e:'2026-04-17', color:'#1B3A6B'},
+  {label:'B2B · Training T1',    s:'2026-04-20', e:'2026-04-24', color:'#2D72B8'},
+  {label:'B2B · Training T2',    s:'2026-04-25', e:'2026-05-04', color:'#5B9BD5'},
+  {label:'B2B · Nesting T1+T2',  s:'2026-05-05', e:'2026-05-11', color:'#117A4D'},
+  {label:'B3 · Reclutamiento',   s:'2026-05-06', e:'2026-05-07', color:'#1B3A6B'},
+  {label:'B3 · Training T1',     s:'2026-05-08', e:'2026-05-13', color:'#2D72B8'},
+  {label:'B3 · Nesting T1',      s:'2026-05-14', e:'2026-05-20', color:'#1A9660'},
+  {label:'B3 · Training T2',     s:'2026-05-25', e:'2026-05-30', color:'#5B9BD5'},
+  {label:'B3 · Nesting T2',      s:'2026-05-31', e:'2026-06-06', color:'#2E8B7A'},
+  {label:'B4 · Reclutamiento',   s:'2026-05-01', e:'2026-05-15', color:'#1B3A6B'},
+  {label:'B4 · Training T1',     s:'2026-05-18', e:'2026-05-22', color:'#2D72B8'},
+  {label:'B4 · Nesting T1',      s:'2026-05-23', e:'2026-05-29', color:'#1A9660'},
+  {label:'B4 · Training T1+T2',  s:'2026-05-22', e:'2026-06-05', color:'#7B4DBF'},
+  {label:'B4 · Nesting T1+T2',   s:'2026-06-06', e:'2026-06-12', color:'#117A4D'},
+  {label:'B4 · Training T2',     s:'2026-06-08', e:'2026-06-13', color:'#5B9BD5'},
+  {label:'B4 · Nesting T2',      s:'2026-06-15', e:'2026-06-21', color:'#2E8B7A'},
+  {label:'T2B1 · Training T2',   s:'2026-05-12', e:'2026-05-20', color:'#5B9BD5'},
+  {label:'T2B1 · Nesting T2',    s:'2026-05-21', e:'2026-05-27', color:'#2E8B7A'},
+  {label:'T2B2 · Training T2',   s:'2026-05-25', e:'2026-05-30', color:'#5B9BD5'},
+  {label:'T2B2 · Nesting T2',    s:'2026-05-31', e:'2026-06-06', color:'#2E8B7A'},
+  {label:'T2B3 · Training T2',   s:'2026-06-08', e:'2026-06-13', color:'#5B9BD5'},
+  {label:'T2B3 · Nesting T2',    s:'2026-06-15', e:'2026-06-21', color:'#2E8B7A'},
+];
+
+function renderGantt(){
+  const START = new Date('2026-04-01'), END = new Date('2026-06-21');
+  const totalDays = (END-START)/(1000*60*60*24);
+
+  function pct(d){ return ((new Date(d)-START)/(1000*60*60*24)/totalDays*100).toFixed(2); }
+  function wdt(s,e){ return (((new Date(e)-new Date(s))/(1000*60*60*24))/totalDays*100).toFixed(2); }
+
+  const months=[
+    {label:'Abril 2026',color:'#1B3A6B'},
+    {label:'Mayo 2026', color:'#2D72B8'},
+    {label:'Junio 2026',color:'#5B9BD5'}
+  ];
+
+  let html = `
+  <div class="gantt-header">
+    <div class="gantt-label-col"></div>
+    <div class="gantt-months">
+      ${months.map(m=>`<div class="gantt-month" style="background:${m.color}">${m.label}</div>`).join('')}
+    </div>
+  </div>`;
+
+  const groups = [
+    {label:'Batch 1',    prefix:'B1 ·'},
+    {label:'Batch 2A',   prefix:'B2A ·'},
+    {label:'Batch 2B',   prefix:'B2B ·'},
+    {label:'Batch 3',    prefix:'B3 ·'},
+    {label:'Batch 4',    prefix:'B4 ·'},
+    {label:'T2 Batch 1 (15+1TL — Bogotá Trainer)', prefix:'T2B1 ·'},
+    {label:'T2 Batch 2 (15 Ag — Bogotá Trainer)',  prefix:'T2B2 ·'},
+    {label:'T2 Batch 3 (15 Ag — BQL Trainer)',     prefix:'T2B3 ·'},
+  ];
+  groups.forEach(g=>{
+    html += `<div class="gantt-group">${g.label}</div>`;
+    GANTT_ROWS.filter(r=>r.label.startsWith(g.prefix)).forEach(r=>{
+      const left = pct(r.s), width = wdt(r.s,r.e);
+      html += `
+      <div class="gantt-row">
+        <div class="gantt-row-label">${r.label.split('·')[1].trim()}</div>
+        <div class="gantt-track">
+          <div class="gantt-bar" style="left:${left}%;width:${Math.max(1.5,width)}%;background:${r.color}" title="${r.s.slice(5)} → ${r.e.slice(5)}">
+            ${parseFloat(width)>6?r.label.split('·')[1].trim():''}
+          </div>
+        </div>
+      </div>`;
+    });
+  });
+
+  document.getElementById('gantt-content').innerHTML = html;
+}
+
+// ══════════════════════════════════════════════════════════ TEAM
+function renderTeam(){
+  const loadColors=['#E8EDF4','#BACFE4','#7BADD4','#2D72B8','#1B3A6B'];
+  document.getElementById('team-cards').innerHTML = TEAM.map(t=>{
+    const loadPct = Math.min(100, t.load / 5 * 100);
+    return `
+    <div class="inst-card">
+      <div class="inst-top">
+        <div class="inst-avatar" style="background:${t.color}">${t.initials}</div>
+        <div>
+          <div class="inst-name">${t.name}</div>
+          <div class="inst-role">${t.role}</div>
+        </div>
+      </div>
+      <div class="inst-body">
+        <div style="font-size:11px;font-weight:600;color:var(--gray);margin-bottom:6px">SESIONES ASIGNADAS</div>
+        <ul class="inst-sessions">
+          ${t.sessions.map(s=>`<li style=""><span style="width:6px;height:6px;border-radius:50%;background:${t.color};flex-shrink:0;display:inline-block"></span>${s}</li>`).join('')}
+        </ul>
+        <div class="inst-load">Carga de trabajo</div>
+        <div class="prog-bar-wrap"><div class="prog-bar blue" style="width:${loadPct}%;background:${t.color}"></div></div>
+        <div style="margin-top:8px">
+          <span class="status-badge badge-plan" style="font-size:10px">Nivel: ${t.level}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ══════════════════════════════════════════════════════════ NOTES
+let activeFilter = 'Todos';
+
+function addNote(){
+  const batch = document.getElementById('note-batch').value;
+  const text  = document.getElementById('note-text').value.trim();
+  if(!text) return;
+  STATE.notes.unshift({
+    id: Date.now(),
+    batch, text,
+    ts: new Date().toLocaleString('es-CO',{day:'2-digit',month:'2-digit',year:'numeric',hour:'2-digit',minute:'2-digit'})
+  });
+  save();
+  document.getElementById('note-text').value='';
+  renderNotes();
+}
+
+function deleteNote(id){
+  STATE.notes = STATE.notes.filter(n=>n.id!==id);
+  save(); renderNotes();
+}
+
+function exportNotes(){
+  const lines = STATE.notes.map(n=>`[${n.ts}] [${n.batch}] ${n.text}`).join('\n');
+  const blob  = new Blob([lines],{type:'text/plain'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'USES_Notas_'+new Date().toISOString().slice(0,10)+'.txt';
+  a.click();
+}
+
+function setFilter(f){ activeFilter=f; renderNotes(); }
+
+function renderNotes(){
+  const cats=['Todos','General','Batch 1','Batch 2A','Batch 2B','Batch 3','Batch 4','T2 Batch 1','T2 Batch 2','T2 Batch 3','Instructores'];
+  document.getElementById('note-filter').innerHTML = cats.map(c=>
+    `<button class="tag-btn ${activeFilter===c?'active':''}" onclick="setFilter('${c}')">${c}</button>`
+  ).join('');
+
+  const filtered = activeFilter==='Todos' ? STATE.notes : STATE.notes.filter(n=>n.batch===activeFilter);
+  const el = document.getElementById('notes-list');
+  if(!filtered.length){
+    el.innerHTML='<div class="empty">No hay notas registradas.</div>'; return;
+  }
+  el.innerHTML = filtered.map(n=>`
+    <div class="note-item">
+      <div class="note-dot"></div>
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+          <span class="note-tag">${n.batch}</span>
+          <span class="note-meta">${n.ts}</span>
+        </div>
+        <div class="note-text" style="margin-top:6px">${n.text}</div>
+      </div>
+      <button class="delete-btn" onclick="deleteNote(${n.id})">✕</button>
+    </div>
+  `).join('');
+}
+
+// ══════════════════════════════════════════════════════════ RENDER ALL
+function renderAll(){
+  const active = document.querySelector('.page.active').id.replace('page-','');
+  if(active==='dashboard') renderDashboard();
+  if(active==='batches')   renderBatches();
+  if(active==='gantt')     renderGantt();
+  if(active==='team')      renderTeam();
+  if(active==='notes')     renderNotes();
+}
+
+// Init
+renderDashboard();
+</script>
+</body>
+</html>
