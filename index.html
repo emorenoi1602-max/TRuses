@@ -222,8 +222,21 @@ body{font-family:var(--font);background:var(--bg);color:var(--dark);min-height:1
 <!-- Sync status bar -->
 <div class="sync-bar" id="sync-bar">
   <div class="sync-dot" id="sync-dot"></div>
-  <span class="sync-msg" id="sync-msg">Sin conexión — configurando almacenamiento local</span>
+  <span class="sync-msg" id="sync-msg">Iniciando…</span>
   <button class="sync-cfg-btn" onclick="openSetup()">⚙ Configurar nube</button>
+</div>
+
+<!-- Share URL bar (only visible to editor after connecting) -->
+<div id="share-url-bar" style="display:none;align-items:center;gap:10px;padding:6px 24px;background:#103059;font-size:11px;color:#9EC8F0;border-bottom:1px solid rgba(255,255,255,.08)">
+  <span style="font-weight:600;white-space:nowrap">🔗 URL para compartir:</span>
+  <input id="share-url-input" readonly type="text"
+    style="flex:1;border:1px solid rgba(255,255,255,.2);border-radius:5px;padding:3px 8px;
+           background:rgba(255,255,255,.08);color:#fff;font-size:11px;font-family:monospace">
+  <button onclick="copyShareUrl()"
+    style="padding:3px 12px;border:1px solid rgba(255,255,255,.25);border-radius:5px;
+           background:rgba(255,255,255,.1);color:#fff;font-size:11px;cursor:pointer;white-space:nowrap">
+    Copiar
+  </button>
 </div>
 
 <div class="tabs">
@@ -487,11 +500,12 @@ document.getElementById('cfg-save-btn').onclick = async () => {
 const BIN_URL = 'https://api.jsonbin.io/v3/b';
 
 async function cloudLoad(){
-  if(!CFG.apiKey || !CFG.binId) return null;
+  if(!CFG.binId) return null;
   try {
-    const r = await fetch(`${BIN_URL}/${CFG.binId}/latest`, {
-      headers:{ 'X-Master-Key': CFG.apiKey }
-    });
+    // Public bins can be read without API key
+    const headers = { 'X-Bin-Meta': 'false' };
+    if(CFG.apiKey) headers['X-Master-Key'] = CFG.apiKey;
+    const r = await fetch(`${BIN_URL}/${CFG.binId}/latest`, { headers });
     if(!r.ok) return null;
     const j = await r.json();
     return j.record || null;
@@ -518,7 +532,10 @@ async function cloudSave(data){
       const j = await r.json();
       CFG.binId = j.metadata.id;
       localStorage.setItem(LS_CFG, JSON.stringify(CFG));
-      setSyncStatus('ok', `✓ Nube lista · Bin: ${CFG.binId}`);
+      const url = getShareUrl();
+      document.getElementById('share-url-bar').style.display = 'flex';
+      document.getElementById('share-url-input').value = url;
+      setSyncStatus('ok', `✓ Nube lista · Comparte la URL de abajo con tu equipo`);
     } else {
       const r = await fetch(`${BIN_URL}/${CFG.binId}`, {
         method: 'PUT',
@@ -545,25 +562,51 @@ function save(){
   }, 900);
 }
 
-// ── Auto-refresh every 60s for read-only viewers ──────────────────────────────
+// ── Auto-refresh every 30s for read-only viewers ─────────────────────────────
 setInterval(async () => {
-  if(!CFG.apiKey || !CFG.binId) return;
+  if(!CFG.binId) return;
   const cloud = await cloudLoad();
   if(cloud){ STATE = cloud; mergeSchema(); renderAll();
     setSyncStatus('ok', '✓ Actualizado · ' + new Date().toLocaleTimeString('es-CO')); }
-}, 60000);
+}, 30000);
 
-// ── Set initial status bar ────────────────────────────────────────────────────
-if(CFG.apiKey && CFG.binId){
+// ── Read Bin ID from URL hash if viewer has no config ─────────────────────────
+// Share URL format: tracker.html#BINID
+// Anyone with the link auto-loads the correct bin (read-only, no API key needed)
+const hashBinId = location.hash.replace('#','').trim();
+if(hashBinId && !CFG.binId){
+  CFG.binId = hashBinId;
+  // Don't save to localStorage — viewer stays read-only
+}
+
+// ── Show share URL in sync bar after first successful save ───────────────────
+function getShareUrl(){
+  if(!CFG.binId) return null;
+  return location.href.split('#')[0] + '#' + CFG.binId;
+}
+
+// ── Set initial status ────────────────────────────────────────────────────────
+if(CFG.binId){
   setSyncStatus('saving', 'Cargando datos desde la nube…');
   cloudLoad().then(cloud => {
-    if(cloud){ STATE = cloud; mergeSchema(); renderAll();
-      setSyncStatus('ok', '✓ Conectado · ' + new Date().toLocaleTimeString('es-CO')); }
-    else setSyncStatus('err', '⚠ Sin acceso a la nube — usando caché local');
+    if(cloud){
+      STATE = cloud; mergeSchema(); renderAll();
+      if(CFG.apiKey){
+        const url = getShareUrl();
+        setSyncStatus('ok', `✓ Conectado · Comparte: ${url}`);
+        // Show share URL prominently for editor
+        document.getElementById('share-url-bar').style.display = 'flex';
+        document.getElementById('share-url-input').value = url;
+      } else {
+        setSyncStatus('ok', '✓ Datos cargados (modo lectura) · ' + new Date().toLocaleTimeString('es-CO'));
+      }
+    } else {
+      setSyncStatus('err', '⚠ Sin acceso a la nube — usando caché local');
+    }
   });
 } else if(CFG.apiKey){
   setSyncStatus('saving', 'Creando almacenamiento en la nube…');
-  cloudSave(STATE);
+  cloudSave(STATE).then ? cloudSave(STATE) : null;
 } else {
   setSyncStatus('err', '⚠ Sin conexión — haz clic en ⚙ Configurar nube para activar sincronización');
 }
@@ -571,7 +614,17 @@ if(CFG.apiKey && CFG.binId){
 
 
 
-// ══════════════════════════════════════════════════════════ NAVIGATION
+
+function copyShareUrl(){
+  const inp = document.getElementById('share-url-input');
+  inp.select(); inp.setSelectionRange(0,9999);
+  navigator.clipboard.writeText(inp.value).then(()=>{
+    const btn = inp.nextElementSibling;
+    btn.textContent = '✓ Copiado'; btn.style.background = '#1A9660';
+    setTimeout(()=>{ btn.textContent='Copiar'; btn.style.background='rgba(255,255,255,.1)'; }, 2000);
+  });
+}
+
 function showPage(id){
   document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
   document.querySelectorAll('.tab').forEach(t=>t.classList.remove('active'));
