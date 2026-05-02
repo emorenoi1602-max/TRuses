@@ -630,27 +630,45 @@ function copyShareUrl(){
   });
 }
 
-// ── Generate a shareable HTML with credentials pre-embedded ──────────────────
-function generateShareableHTML(){
+async function generateShareableHTML(){
   if(!CFG.apiKey || !CFG.binId){
-    alert('Primero debes conectarte a JSONBin para generar la versión compartible.');
+    alert('Primero debes conectarte a JSONBin.');
     return;
   }
-  // Grab current HTML source
-  const src = document.documentElement.outerHTML;
-  // Replace the placeholder init block with pre-embedded credentials
-  const injected = src.replace(
-    /const LS_CFG\s*=\s*'uses_jsonbin_cfg';/,
-    `const LS_CFG = 'uses_jsonbin_cfg';
-// ── Pre-embedded credentials (auto-generated shareable version) ──
-(function(){ try { localStorage.setItem(LS_CFG, JSON.stringify({apiKey:'${CFG.apiKey}',binId:'${CFG.binId}'})); } catch(e){} })();`
-  );
-  const blob = new Blob([injected], {type:'text/html'});
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
-  a.download = 'index.html';
-  a.click();
-  setTimeout(()=> URL.revokeObjectURL(a.href), 5000);
+  try {
+    // Fetch the raw HTML source file
+    const res  = await fetch(location.href.split('#')[0] + '?nocache=' + Date.now());
+    let   src  = await res.text();
+
+    // Inject a <script> right after <head> that pre-sets credentials in localStorage
+    // This runs first when any viewer opens the page, before the rest of the JS
+    const credScript =
+      `<script>/* AUTO-GENERATED CREDENTIALS — DO NOT EDIT */\n` +
+      `try{localStorage.setItem('uses_jsonbin_cfg',` +
+      `JSON.stringify({apiKey:"${CFG.apiKey}",binId:"${CFG.binId}"}));}` +
+      `catch(e){}<\/script>`;
+
+    src = src.replace('<head>', '<head>\n' + credScript);
+
+    const blob = new Blob([src], {type:'text/html;charset=utf-8'});
+    const a    = document.createElement('a');
+    a.href     = URL.createObjectURL(blob);
+    a.download = 'index.html';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(() => URL.revokeObjectURL(a.href), 5000);
+
+    // Confirm to user
+    const btn = document.querySelector('[onclick="generateShareableHTML()"]');
+    const orig = btn.textContent;
+    btn.textContent = '✓ Descargado — súbelo a GitHub';
+    btn.style.background = '#1A9660';
+    setTimeout(() => { btn.textContent = orig; btn.style.background = '#2D72B8'; }, 3000);
+  } catch(e){
+    alert('Error al generar el archivo: ' + e.message +
+          '\nAsegúrate de abrirlo desde GitHub Pages, no desde un archivo local.');
+  }
 }
 
 function showPage(id){
