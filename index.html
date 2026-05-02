@@ -143,7 +143,35 @@ body{font-family:var(--font);background:var(--bg);color:var(--dark);min-height:1
 .legend-item{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--gray)}
 .legend-dot{width:10px;height:10px;border-radius:2px}
 
-/* ── Tooltip ── */
+/* ── Sync / JSONBin ── */
+.sync-bar{display:flex;align-items:center;gap:8px;padding:5px 24px;background:var(--dark);font-size:11px;color:var(--sky);border-bottom:1px solid rgba(255,255,255,.08)}
+.sync-dot{width:8px;height:8px;border-radius:50%;background:#aaa;flex-shrink:0;transition:background .3s}
+.sync-dot.ok{background:var(--done)}
+.sync-dot.saving{background:var(--prog);animation:pulse .8s infinite}
+.sync-dot.err{background:var(--red)}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.3}}
+.sync-msg{flex:1}
+.sync-cfg-btn{margin-left:auto;padding:3px 10px;border:1px solid rgba(255,255,255,.2);border-radius:4px;background:transparent;color:var(--sky);font-size:10px;cursor:pointer}
+.sync-cfg-btn:hover{background:rgba(255,255,255,.08)}
+
+/* ── Setup modal ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.55);z-index:200;display:flex;align-items:center;justify-content:center}
+.modal-overlay.hidden{display:none}
+.modal{background:#fff;border-radius:14px;padding:32px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.25)}
+.modal h2{font-size:17px;color:var(--navy);margin-bottom:6px}
+.modal p{font-size:12.5px;color:var(--gray);line-height:1.6;margin-bottom:20px}
+.modal label{display:block;font-size:11px;font-weight:600;color:var(--dark);margin-bottom:4px;letter-spacing:.04em}
+.modal input{width:100%;border:1px solid var(--border);border-radius:8px;padding:9px 12px;font-size:13px;margin-bottom:14px;font-family:var(--font);color:var(--dark)}
+.modal input:focus{outline:none;border-color:var(--blue)}
+.modal-actions{display:flex;gap:10px;margin-top:4px}
+.modal-actions button{flex:1;padding:10px;border-radius:8px;font-size:13px;font-weight:600;cursor:pointer;border:none}
+.btn-primary{background:var(--blue);color:#fff}
+.btn-primary:hover{background:var(--navy)}
+.btn-secondary{background:var(--lgray);color:var(--dark)}
+.modal-hint{font-size:11px;color:var(--gray);margin-top:14px;line-height:1.6;background:var(--bg);border-radius:8px;padding:10px 12px}
+.modal-hint a{color:var(--blue)}
+.modal-hint code{background:var(--lgray);padding:1px 5px;border-radius:3px;font-size:10.5px}
+
 .tooltip-wrap{position:relative;display:inline-block}
 .tooltip-wrap .tip{position:absolute;bottom:110%;left:50%;transform:translateX(-50%);background:var(--dark);color:#fff;padding:4px 8px;border-radius:6px;font-size:11px;white-space:nowrap;pointer-events:none;opacity:0;transition:opacity .2s;z-index:50}
 .tooltip-wrap:hover .tip{opacity:1}
@@ -168,7 +196,36 @@ body{font-family:var(--font);background:var(--bg);color:var(--dark);min-height:1
   <div class="header-date" id="header-date"></div>
 </div>
 
-<div class="tabs">
+<!-- Setup modal -->
+<div class="modal-overlay" id="setup-modal">
+  <div class="modal">
+    <h2>⚙️ Configurar sincronización en la nube</h2>
+    <p>Para que todos vean los mismos datos en tiempo real, conecta el tracker a <strong>JSONBin.io</strong> (gratuito). Solo necesitas hacer esto una vez.</p>
+    <label>API KEY (tu clave secreta de JSONBin)</label>
+    <input id="cfg-apikey" type="password" placeholder="$2a$10$..."/>
+    <label>BIN ID (déjalo vacío la primera vez — se crea automáticamente)</label>
+    <input id="cfg-binid" placeholder="67a3b2c1..."/>
+    <div class="modal-actions">
+      <button class="btn-secondary" id="cfg-cancel-btn">Cancelar</button>
+      <button class="btn-primary" id="cfg-save-btn">Guardar y conectar</button>
+    </div>
+    <div class="modal-hint">
+      <strong>Cómo obtener tu API Key:</strong><br>
+      1. Ve a <a href="https://jsonbin.io" target="_blank">jsonbin.io</a> → crea cuenta gratis<br>
+      2. En tu perfil → <strong>API Keys</strong> → copia la <code>Secret Key</code><br>
+      3. Pégala arriba y haz clic en <em>Guardar y conectar</em><br>
+      4. El Bin ID se genera solo en el primer guardado — comparte la URL del tracker y listo.
+    </div>
+  </div>
+</div>
+
+<!-- Sync status bar -->
+<div class="sync-bar" id="sync-bar">
+  <div class="sync-dot" id="sync-dot"></div>
+  <span class="sync-msg" id="sync-msg">Sin conexión — configurando almacenamiento local</span>
+  <button class="sync-cfg-btn" onclick="openSetup()">⚙ Configurar nube</button>
+</div>
+
   <div class="tab active" onclick="showPage('dashboard')">Dashboard</div>
   <div class="tab" onclick="showPage('batches')">Seguimiento Batches</div>
   <div class="tab" onclick="showPage('gantt')">Timeline Gantt</div>
@@ -358,23 +415,163 @@ const TEAM = [
    sessions:['B4 T1+T2 (apoyo BQL Trainer)'], level:'T1+T2', load:1},
 ];
 
-// ══════════════════════════════════════════════════════════ STATE / STORAGE
-const SK = 'uses_tracker_v6';
-let STATE = JSON.parse(localStorage.getItem(SK) || 'null');
-if (!STATE) {
-  STATE = { batches: JSON.parse(JSON.stringify(BATCHES_INIT)), notes: [] };
-  save();
-}
-BATCHES_INIT.forEach(bi => {
-  let b = STATE.batches.find(x=>x.id===bi.id);
-  if(!b){ STATE.batches.push(JSON.parse(JSON.stringify(bi))); return; }
-  bi.phases.forEach(pi => {
-    let p = b.phases.find(x=>x.id===pi.id);
-    if(!p) b.phases.push(JSON.parse(JSON.stringify(pi)));
-  });
-});
+// ══════════════════════════════════════════════════════════ JSONBIN SYNC ENGINE
+const LS_CFG  = 'uses_jsonbin_cfg';   // stores {apiKey, binId}
+const LS_CACHE= 'uses_tracker_cache'; // local fallback cache
 
-function save(){ localStorage.setItem(SK, JSON.stringify(STATE)); }
+let CFG   = JSON.parse(localStorage.getItem(LS_CFG) || 'null') || {apiKey:'', binId:''};
+let STATE = null;
+let saveTimer = null;
+
+// ── UI helpers ──────────────────────────────────────────────────────────────
+function setSyncStatus(status, msg){
+  const dot = document.getElementById('sync-dot');
+  const txt = document.getElementById('sync-msg');
+  dot.className = 'sync-dot ' + status;   // ok | saving | err | ''
+  txt.textContent = msg;
+}
+
+// ── Setup modal ─────────────────────────────────────────────────────────────
+function openSetup(){
+  document.getElementById('cfg-apikey').value = CFG.apiKey || '';
+  document.getElementById('cfg-binid').value  = CFG.binId  || '';
+  document.getElementById('setup-modal').classList.remove('hidden');
+}
+function closeSetup(){
+  document.getElementById('setup-modal').classList.add('hidden');
+}
+document.getElementById('cfg-cancel-btn').onclick = () => {
+  if(!CFG.apiKey) return; // must configure first time
+  closeSetup();
+};
+document.getElementById('cfg-save-btn').onclick = async () => {
+  const key = document.getElementById('cfg-apikey').value.trim();
+  const bin = document.getElementById('cfg-binid').value.trim();
+  if(!key){ alert('La API Key es obligatoria.'); return; }
+  CFG = {apiKey: key, binId: bin};
+  localStorage.setItem(LS_CFG, JSON.stringify(CFG));
+  closeSetup();
+  await initState();
+  renderAll();
+};
+
+// ── JSONBin API ──────────────────────────────────────────────────────────────
+const BIN_URL = 'https://api.jsonbin.io/v3/b';
+
+async function cloudLoad(){
+  if(!CFG.binId) return null;
+  try {
+    const r = await fetch(`${BIN_URL}/${CFG.binId}/latest`, {
+      headers:{'X-Master-Key': CFG.apiKey}
+    });
+    if(!r.ok) throw new Error(r.status);
+    const j = await r.json();
+    return j.record;
+  } catch(e){
+    return null;
+  }
+}
+
+async function cloudSave(data){
+  if(!CFG.apiKey) return false;
+  try {
+    setSyncStatus('saving','Guardando en la nube…');
+    if(!CFG.binId){
+      // Create new bin
+      const r = await fetch(BIN_URL, {
+        method:'POST',
+        headers:{
+          'Content-Type':'application/json',
+          'X-Master-Key': CFG.apiKey,
+          'X-Bin-Name':'USES-Tracker',
+          'X-Bin-Private':'false'
+        },
+        body: JSON.stringify(data)
+      });
+      if(!r.ok) throw new Error(r.status);
+      const j = await r.json();
+      CFG.binId = j.metadata.id;
+      localStorage.setItem(LS_CFG, JSON.stringify(CFG));
+      setSyncStatus('ok',`✓ Bin creado: ${CFG.binId} — comparte la URL a todos`);
+    } else {
+      const r = await fetch(`${BIN_URL}/${CFG.binId}`, {
+        method:'PUT',
+        headers:{
+          'Content-Type':'application/json',
+          'X-Master-Key': CFG.apiKey
+        },
+        body: JSON.stringify(data)
+      });
+      if(!r.ok) throw new Error(r.status);
+      setSyncStatus('ok','✓ Sincronizado  · ' + new Date().toLocaleTimeString('es-CO'));
+    }
+    return true;
+  } catch(e){
+    setSyncStatus('err','⚠ Error al guardar en la nube — cambios guardados localmente');
+    return false;
+  }
+}
+
+// ── Debounced save ───────────────────────────────────────────────────────────
+function save(){
+  // Always save locally as fallback
+  localStorage.setItem(LS_CACHE, JSON.stringify(STATE));
+  // Debounce cloud save by 800ms to batch rapid clicks
+  clearTimeout(saveTimer);
+  saveTimer = setTimeout(async () => {
+    if(CFG.apiKey) await cloudSave(STATE);
+  }, 800);
+}
+
+// ── Init ─────────────────────────────────────────────────────────────────────
+async function initState(){
+  if(!CFG.apiKey){
+    // No config yet — use local defaults
+    const cached = JSON.parse(localStorage.getItem(LS_CACHE) || 'null');
+    STATE = cached || { batches: JSON.parse(JSON.stringify(BATCHES_INIT)), notes: [] };
+    setSyncStatus('err','Sin conexión a la nube — configura JSONBin para sincronizar');
+    openSetup();
+  } else {
+    setSyncStatus('saving','Cargando datos desde la nube…');
+    const cloud = await cloudLoad();
+    if(cloud){
+      STATE = cloud;
+      setSyncStatus('ok','✓ Datos cargados · ' + new Date().toLocaleTimeString('es-CO'));
+    } else {
+      // Fallback to local cache
+      const cached = JSON.parse(localStorage.getItem(LS_CACHE) || 'null');
+      STATE = cached || { batches: JSON.parse(JSON.stringify(BATCHES_INIT)), notes: [] };
+      setSyncStatus('err','⚠ No se pudo cargar la nube — usando caché local');
+    }
+  }
+
+  // Merge any missing batches/phases from BATCHES_INIT (schema updates)
+  if(!STATE.batches) STATE.batches = JSON.parse(JSON.stringify(BATCHES_INIT));
+  BATCHES_INIT.forEach(bi => {
+    let b = STATE.batches.find(x=>x.id===bi.id);
+    if(!b){ STATE.batches.push(JSON.parse(JSON.stringify(bi))); return; }
+    // Preserve existing flag
+    if(bi.existing !== undefined) b.existing = bi.existing;
+    bi.phases.forEach(pi => {
+      let p = b.phases.find(x=>x.id===pi.id);
+      if(!p) b.phases.push(JSON.parse(JSON.stringify(pi)));
+    });
+  });
+  if(!STATE.notes) STATE.notes = [];
+}
+
+// ── Auto-refresh every 60s for viewers ──────────────────────────────────────
+setInterval(async () => {
+  if(!CFG.apiKey || !CFG.binId) return;
+  const cloud = await cloudLoad();
+  if(cloud){
+    STATE = cloud;
+    renderAll();
+    setSyncStatus('ok','✓ Actualizado · ' + new Date().toLocaleTimeString('es-CO'));
+  }
+}, 60000);
+
+
 
 // ══════════════════════════════════════════════════════════ NAVIGATION
 function showPage(id){
@@ -732,8 +929,11 @@ function renderAll(){
   if(active==='notes')     renderNotes();
 }
 
-// Init
-renderDashboard();
+// Init — async bootstrap
+(async () => {
+  await initState();
+  renderDashboard();
+})();
 </script>
 </body>
 </html>
