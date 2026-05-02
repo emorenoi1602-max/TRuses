@@ -228,14 +228,19 @@ body{font-family:var(--font);background:var(--bg);color:var(--dark);min-height:1
 
 <!-- Share URL bar (only visible to editor after connecting) -->
 <div id="share-url-bar" style="display:none;align-items:center;gap:10px;padding:6px 24px;background:#103059;font-size:11px;color:#9EC8F0;border-bottom:1px solid rgba(255,255,255,.08)">
-  <span style="font-weight:600;white-space:nowrap">🔗 URL para compartir:</span>
+  <span style="font-weight:600;white-space:nowrap">🔗 Versión para compartir:</span>
   <input id="share-url-input" readonly type="text"
     style="flex:1;border:1px solid rgba(255,255,255,.2);border-radius:5px;padding:3px 8px;
            background:rgba(255,255,255,.08);color:#fff;font-size:11px;font-family:monospace">
   <button onclick="copyShareUrl()"
     style="padding:3px 12px;border:1px solid rgba(255,255,255,.25);border-radius:5px;
            background:rgba(255,255,255,.1);color:#fff;font-size:11px;cursor:pointer;white-space:nowrap">
-    Copiar
+    Copiar URL
+  </button>
+  <button onclick="generateShareableHTML()"
+    style="padding:3px 14px;border:none;border-radius:5px;
+           background:#2D72B8;color:#fff;font-size:11px;font-weight:600;cursor:pointer;white-space:nowrap">
+    ↓ Descargar index.html para subir a GitHub
   </button>
 </div>
 
@@ -623,6 +628,29 @@ function copyShareUrl(){
     btn.textContent = '✓ Copiado'; btn.style.background = '#1A9660';
     setTimeout(()=>{ btn.textContent='Copiar'; btn.style.background='rgba(255,255,255,.1)'; }, 2000);
   });
+}
+
+// ── Generate a shareable HTML with credentials pre-embedded ──────────────────
+function generateShareableHTML(){
+  if(!CFG.apiKey || !CFG.binId){
+    alert('Primero debes conectarte a JSONBin para generar la versión compartible.');
+    return;
+  }
+  // Grab current HTML source
+  const src = document.documentElement.outerHTML;
+  // Replace the placeholder init block with pre-embedded credentials
+  const injected = src.replace(
+    /const LS_CFG\s*=\s*'uses_jsonbin_cfg';/,
+    `const LS_CFG = 'uses_jsonbin_cfg';
+// ── Pre-embedded credentials (auto-generated shareable version) ──
+(function(){ try { localStorage.setItem(LS_CFG, JSON.stringify({apiKey:'${CFG.apiKey}',binId:'${CFG.binId}'})); } catch(e){} })();`
+  );
+  const blob = new Blob([injected], {type:'text/html'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'index.html';
+  a.click();
+  setTimeout(()=> URL.revokeObjectURL(a.href), 5000);
 }
 
 function showPage(id){
