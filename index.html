@@ -2,9 +2,6 @@
 <html lang="es">
 <head>
 <meta charset="UTF-8">
-<script>/* CREDENCIALES PRE-CONFIGURADAS */
-try{localStorage.setItem('uses_jsonbin_cfg',JSON.stringify({apiKey:"$2a$10$nELxjJWGhM.xGJ6RPKZjI.nfzX87Lnl.vNsxZsU3n5MC4PlotowTm",binId:"69f54633856a682189978c0c"}));}catch(e){}
-</script>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>USES Delivery Tracker — Atlantic Quantum</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -441,7 +438,16 @@ const TEAM = [
 const LS_CFG   = 'uses_jsonbin_cfg';
 const LS_CACHE = 'uses_tracker_cache';
 
-let CFG      = JSON.parse(localStorage.getItem(LS_CFG) || 'null') || {apiKey:'', binId:''};
+// ── Embedded credentials (override localStorage if set) ──────────────────────
+const EMBED_KEY = "$2a$10$nELxjJWGhM.xGJ6RPKZjI.nfzX87Lnl.vNsxZsU3n5MC4PlotowTm";
+const EMBED_BIN = "69f54633856a682189978c0c";
+
+// Always use embedded credentials if present, fall back to localStorage
+let _lsCfg = JSON.parse(localStorage.getItem(LS_CFG) || '{}');
+let CFG = {
+  apiKey: EMBED_KEY || _lsCfg.apiKey || '',
+  binId:  EMBED_BIN || _lsCfg.binId  || ''
+};
 let STATE    = null;
 let saveTimer = null;
 
