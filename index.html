@@ -223,7 +223,8 @@ body{font-family:var(--font);background:var(--bg);color:var(--dark);min-height:1
 <div class="sync-bar" id="sync-bar">
   <div class="sync-dot" id="sync-dot"></div>
   <span class="sync-msg" id="sync-msg">Iniciando…</span>
-  <button class="sync-cfg-btn" onclick="openSetup()">⚙ Configurar nube</button>
+  <button class="sync-cfg-btn" onclick="openSetup()">⚙ Configurar</button>
+  <button class="sync-cfg-btn" onclick="forceRefresh()" style="margin-left:4px">↺ Actualizar</button>
 </div>
 
 <!-- Share URL bar (only visible to editor after connecting) -->
@@ -528,10 +529,9 @@ async function cloudLoad(){
 
 async function cloudSave(data){
   if(!CFG.apiKey) return;
+  setSyncStatus('saving', 'Guardando…');
   try {
-    setSyncStatus('saving', 'Guardando en la nube…');
     if(!CFG.binId){
-      // Create new bin
       const r = await fetch(BIN_URL, {
         method: 'POST',
         headers:{
@@ -542,14 +542,14 @@ async function cloudSave(data){
         },
         body: JSON.stringify(data)
       });
-      if(!r.ok) throw new Error(r.status);
+      if(!r.ok){ const t=await r.text(); throw new Error(r.status+': '+t); }
       const j = await r.json();
       CFG.binId = j.metadata.id;
       localStorage.setItem(LS_CFG, JSON.stringify(CFG));
-      const url = getShareUrl();
+      const url = location.href.split('#')[0] + '#' + CFG.binId;
       document.getElementById('share-url-bar').style.display = 'flex';
       document.getElementById('share-url-input').value = url;
-      setSyncStatus('ok', `✓ Nube lista · Comparte la URL de abajo con tu equipo`);
+      setSyncStatus('ok', `✓ Nube lista · Bin: ${CFG.binId}`);
     } else {
       const r = await fetch(`${BIN_URL}/${CFG.binId}`, {
         method: 'PUT',
@@ -559,11 +559,12 @@ async function cloudSave(data){
         },
         body: JSON.stringify(data)
       });
-      if(!r.ok) throw new Error(r.status);
-      setSyncStatus('ok', '✓ Sincronizado · ' + new Date().toLocaleTimeString('es-CO'));
+      if(!r.ok){ const t=await r.text(); throw new Error(r.status+': '+t); }
+      setSyncStatus('ok', '✓ Guardado en nube · ' + new Date().toLocaleTimeString('es-CO'));
     }
   } catch(e){
-    setSyncStatus('err', '⚠ Error al guardar en nube — cambios guardados localmente');
+    console.error('cloudSave error:', e);
+    setSyncStatus('err', '⚠ Error al guardar: ' + e.message);
   }
 }
 
@@ -576,13 +577,20 @@ function save(){
   }, 900);
 }
 
-// ── Auto-refresh every 30s for read-only viewers ─────────────────────────────
-setInterval(async () => {
-  if(!CFG.binId) return;
+// ── Force refresh (manual button) ────────────────────────────────────────────
+async function forceRefresh(){
+  setSyncStatus('saving','Actualizando…');
   const cloud = await cloudLoad();
-  if(cloud){ STATE = cloud; mergeSchema(); renderAll();
-    setSyncStatus('ok', '✓ Actualizado · ' + new Date().toLocaleTimeString('es-CO')); }
-}, 30000);
+  if(cloud){
+    STATE = cloud; mergeSchema(); renderAll();
+    setSyncStatus('ok','✓ Actualizado · ' + new Date().toLocaleTimeString('es-CO'));
+  } else {
+    setSyncStatus('err','⚠ No se pudo conectar con la nube');
+  }
+}
+
+// ── Auto-refresh every 15s ────────────────────────────────────────────────────
+setInterval(forceRefresh, 15000);
 
 // ── Read Bin ID from URL hash if viewer has no config ─────────────────────────
 // Share URL format: tracker.html#BINID
